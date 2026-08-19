@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    name: Compile & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Type-check contract package
+        run: npx tsc -p contract/tsconfig.json --noEmit
+
+      - name: Type-check frontend
+        working-directory: frontend
+        run: npx tsc -b
+
+      - name: Run contract/unit tests
+        run: npx vitest run
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npx vite build
+
+  compact-compile:
+    name: Compile Compact circuit (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # The Compact compiler CLI/toolchain version tracks Midnight's
+      # active testnet release and is best installed per the current
+      # Midnight docs (https://docs.midnight.network). This job is
+      # non-blocking (continue-on-error) so contract-logic + frontend
+      # CI still gate merges even before the toolchain step is pinned
+      # to a specific published package/version.
+      - name: Compile age-gate.compact
+        run: |
+          npm install -g @midnight-ntwrk/compact-cli || echo "Install the current Compact CLI per Midnight docs and update this step"
+          npx compact compile contract/src/age-gate.compact contract/build || echo "Wire up the real compiler command here once installed"
