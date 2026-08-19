@@ -48,3 +48,17 @@ describe("age gate ledger model", () => {
     expect(serialized).not.toContain("42");
   });
 });
+
+describe("edge cases", () => {
+  it("treats an age exactly equal to the threshold as passing", () => {
+    const state = initLedger(21);
+    const next = verifyEligibility(state, "wallet_exact", 21);
+    expect(isEligible(next, "wallet_exact")).toBe(true);
+  });
+
+  it("supports a zero threshold (open access) without throwing", () => {
+    const state = initLedger(0);
+    const next = verifyEligibility(state, "wallet_any_age", 0);
+    expect(isEligible(next, "wallet_any_age")).toBe(true);
+  });
+});
