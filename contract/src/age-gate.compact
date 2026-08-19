@@ -1,0 +1,74 @@
+// Age / Eligibility Gate — Midnight Compact contract
+//
+// Goal: let a user PROVE their age meets a public threshold (e.g. 18+)
+// WITHOUT ever revealing their birthdate or exact age on-chain.
+//
+// Public (on the ledger, visible to anyone):
+//   - the threshold the deployer configured (e.g. 18)
+//   - a running count of how many wallets have passed the check
+//   - which wallet addresses have passed (yes/no only, no age value)
+//
+// Private (never leaves the user's device):
+//   - the user's date of birth
+//   - the user's exact computed age
+//
+// NOTE: This file targets the Compact language as documented for the
+// Midnight public testnet at the time of writing. Compact syntax has
+// changed between releases — before submitting, compile it with your
+// installed `compact` CLI (`npx compact compile contract/src/age-gate.compact`)
+// against the toolchain version pinned in package.json, and adjust any
+// syntax the compiler flags. This sandbox does not have network access
+// to Midnight's package registry, so the compiler could not be run here.
+
+pragma language_version 0.13;
+
+import CompactStandardLibrary;
+
+// ---- Public ledger state ----------------------------------------------
+
+// The minimum age required to pass the gate. Set once at deploy time.
+export ledger threshold: Uint<8>;
+
+// Total number of distinct wallets that have successfully verified.
+export ledger verifiedCount: Counter;
+
+// Per-wallet pass/fail record. Stores ONLY a boolean per address —
+// never the age or birthdate that produced it.
+export ledger eligible: Map<Bytes<32>, Boolean>;
+
+// ---- Private witness -----------------------------------------------------
+// Supplied off-chain, from the user's own private state (see witnesses.ts).
+// The circuit consumes it inside the zero-knowledge proof; it is never
+// transmitted to the network or written to any public ledger field.
+witness userAge(): Uint<8>;
+
+// ---- Circuits --------------------------------------------------------
+
+// Deployer sets the public threshold once, at contract initialization.
+export circuit initialize(minimumAge: Uint<8>): [] {
+  threshold = minimumAge;
+  verifiedCount = 0;
+}
+
+// Any wallet can call this to prove eligibility. The proof convinces the
+// network that userAge() >= threshold WITHOUT revealing userAge() itself.
+// Only the boolean result and the caller's address touch public state.
+export circuit verifyEligibility(): [] {
+  const age = userAge();
+  const passed = age >= threshold;
+  assert(passed, "does not meet the minimum age requirement");
+
+  const caller = ownPublicKey();
+  const alreadyVerified = eligible.member(caller) && eligible.lookup(caller);
+
+  if (!alreadyVerified) {
+    eligible.insert(caller, true);
+    verifiedCount.increment(1);
+  }
+}
+
+// Read-only helper a frontend can call to check a wallet's public status
+// without needing a proof (this is public information by design).
+export circuit isEligible(wallet: Bytes<32>): Boolean {
+  return eligible.member(wallet) && eligible.lookup(wallet);
+}

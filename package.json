@@ -1,0 +1,18 @@
+{
+  "name": "midnight-age-gate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Midnight Builder Challenge (Level 3) — Age/Eligibility Gate dApp with tests and CI/CD",
+  "type": "module",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc -p contract/tsconfig.json --noEmit && npm run build --workspace frontend",
+    "lint": "tsc -p contract/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.1"
+  }
+}
