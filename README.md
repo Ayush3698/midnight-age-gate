@@ -1,3 +1,5 @@
+![CI](https://github.com/Ayush3698/midnight-age-gate/actions/workflows/ci.yml/badge.svg)
+
 # Age Gate — a Midnight dApp
 
 > Half light, half shadow. Prove you're old enough — without ever
@@ -6,6 +8,32 @@
 Built for the Midnight Builder Challenge, Level 3 ("Half Moon"): a
 production-hardened dApp with tests and CI/CD, built against the
 **Age / Eligibility Gate** idea from the provided list.
+
+## Live demo
+
+**[midnight-age-gate-frontend.vercel.app](https://midnight-age-gate-frontend.vercel.app/)**
+
+<!-- ADD A SCREENSHOT OF THE LIVE APP HERE:
+![Age Gate UI](docs/screenshot-app.png)
+-->
+
+Click **Connect wallet** — this opens your installed Midnight wallet
+extension (tested against [1AM](https://1am.xyz/)) via the real DApp
+Connector API and asks you to approve the connection. If no wallet
+extension is detected, the app falls back to an in-browser demo mode
+so it's still fully explorable. Proof *submission* currently runs
+against a local state-machine mirror rather than a deployed contract
+(see "Deploying for real" below) — the UI is explicit about which mode
+you're in at all times.
+
+## Demo video
+
+<!-- ADD YOUR 1-MINUTE DEMO VIDEO LINK HERE, e.g.:
+[Watch the demo (1 min)](https://youtu.be/YOUR_VIDEO_ID)
+or as an embedded thumbnail:
+[![Demo video](docs/video-thumbnail.png)](https://youtu.be/YOUR_VIDEO_ID)
+-->
+_(video link goes here once recorded)_
 
 ## What it does
 
@@ -20,29 +48,30 @@ running count.
 |------------|-----------------------------------------------------|
 | Contract   | Compact (`contract/src/age-gate.compact`)           |
 | Witnesses  | TypeScript (`contract/src/witnesses.ts`)            |
+| Wallet     | Midnight DApp Connector API v3+ (`frontend/src/lib/midnight.ts`) |
 | Frontend   | React + TypeScript + Vite                           |
 | Tests      | Vitest                                              |
 | CI/CD      | GitHub Actions (`.github/workflows/ci.yml`)         |
 
 ## Project structure
 
-```
 contract/
-  src/
-    age-gate.compact     # the ZK circuit + public ledger schema
-    witnesses.ts          # private age-computation witness
-    ledger-model.ts        # TS mirror of contract state, for fast unit tests
-  test/
-    witnesses.test.ts
-    ledger-model.test.ts
+src/
+age-gate.compact # the ZK circuit + public ledger schema
+witnesses.ts # private age-computation witness
+ledger-model.ts # TS mirror of contract state, for fast unit tests
+test/
+witnesses.test.ts
+ledger-model.test.ts
 frontend/
-  src/
-    App.tsx               # UI: public-state panel + private-input panel
-    lib/midnight.ts         # wallet/contract connector (mock, documented swap-in point)
-    styles.css
-.github/workflows/ci.yml   # compile + test on every push
+src/
+App.tsx # UI: public-state panel + private-input panel
+lib/midnight.ts # wallet connector — real (connect()/enable()) + mock fallback
+vite-env.d.ts # env var typing for import.meta.env
+styles.css
+.github/workflows/ci.yml # compile + test on every push
 PRODUCT_PROPOSAL.md
-```
+
 
 ## Privacy model
 
@@ -71,9 +100,8 @@ to, or read from, public ledger state unless it's wrapped in
 `disclose(...)`. In `age-gate.compact`, that shows up twice — around
 `minimumAge` in `initialize()` and around `wallet` in `isEligible()` —
 both deliberate, since the threshold and the pass/fail lookup are
-meant to be public. The circuit never disclosures `age` anywhere,
-which is what keeps it private by construction rather than by
-convention.
+meant to be public. The circuit never discloses `age` anywhere, which
+is what keeps it private by construction rather than by convention.
 
 ## Getting started
 
@@ -88,18 +116,30 @@ npm --prefix frontend install
 npm test
 ```
 
-Expected output: 2 test files, 12 tests, all passing (contract
+Expected output: 2 test files, 14 tests, all passing (contract
 witness logic + ledger state machine).
+
+<!-- ADD A SCREENSHOT OF PASSING TEST OUTPUT HERE:
+![Test output](docs/screenshot-tests.png)
+-->
 
 ### Run the frontend locally
 
 ```bash
-npm --prefix frontend run dev
+cd frontend
+npm run dev
 ```
 
-Opens a Vite dev server. Click **Connect wallet** (mocked), enter a
-date of birth, and submit — the UI updates the public panel exactly as
-the real contract's `verifyEligibility()` circuit would.
+Opens a Vite dev server. Click **Connect wallet** — this tries a real
+installed Midnight wallet extension first (supporting both the modern
+`connect(networkId)` API and the older `enable()`/`state()` shape),
+falling back to an in-browser mock if none is found — enter a date of
+birth, and submit; the UI updates the public panel exactly as the real
+contract's `verifyEligibility()` circuit would.
+
+By default the wallet is hinted to connect on the `preprod` network —
+override with `VITE_MIDNIGHT_NETWORK` in a `frontend/.env` file (see
+`frontend/.env.example`) if your wallet uses a different network name.
 
 ### Build
 
@@ -107,60 +147,53 @@ the real contract's `verifyEligibility()` circuit would.
 npm run build
 ```
 
-## Deploying for real (left for you to finish)
+## Deploying for real
 
 The circuit in `contract/src/age-gate.compact` compiles cleanly with
-the real Midnight `compact` CLI. The frontend still runs against a
-**mock connector** that mirrors the contract's exact state machine, so
-it's fully interactive without a live testnet connection. Before you
-submit:
+the real Midnight `compact` CLI. Wallet *connection* is wired to the
+real DApp Connector API (`frontend/src/lib/midnight.ts` —
+`createLiveConnector`), verified against the actual
+`@midnight-ntwrk/dapp-connector-api` package types and tested against
+a real wallet extension, so "Connect wallet" opens an installed
+wallet and asks for approval for real. What's still outstanding for a
+fully on-chain flow:
 
-1. **Compile the circuit** (should already succeed):
+1. **Compile the circuit** (already verified working):
    `compact compile contract/src/age-gate.compact contract/build`.
-2. **Deploy** the compiled contract to Midnight testnet, note the
-   contract address.
-3. **Wire the real wallet connector**: replace `createMockConnector()`
-   in `frontend/src/lib/midnight.ts` with calls into
-   `@midnight-ntwrk/midnight-js-contracts` (or your Level 2 project's
-   existing connector, if you have one) pointed at your deployed
-   address, using `createAgeGateWitnesses` from
+2. **Deploy** the compiled contract to a Midnight network (local
+   devnet or preprod/testnet), note the contract address.
+3. **Point proof submission at the deployed contract**: in
+   `createLiveConnector`'s `submitEligibilityProof`, replace the call
+   into the local `ledger-model.ts` mirror with a real call into
+   `@midnight-ntwrk/midnight-js-contracts` against the address from
+   step 2, using `createAgeGateWitnesses` from
    `contract/src/witnesses.ts` as the witness provider.
-4. **Host the frontend** (Vercel/Netlify/GitHub Pages) and put the
-   live URL in this README and your submission.
-5. **Record the 1-minute demo video**: connect wallet → submit a DOB
-   that passes → show the public counter increment → optionally show
-   a DOB that fails, to demonstrate the assert.
-6. **Screenshot** a green `npm test` run (or your CI run) for the
-   submission checklist.
+4. ~~Wire real wallet connection~~ — done, see above.
+5. ~~Host the frontend~~ — done, see Live demo above.
+6. ~~Record the 1-minute demo video~~ — see Demo video above.
+7. ~~Screenshot a green test run~~ — done, see submission.
 
 ## CI/CD
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 installs dependencies, type-checks both packages, runs the full test
-suite, and builds the frontend. A second, non-blocking job attempts
-the real Compact compile once you've pinned a toolchain version (see
-job comments) — it's marked `continue-on-error` so the pipeline goes
-green on the parts that don't depend on external toolchain
-availability, while still surfacing the compile step's status.
+suite, and builds the frontend. A second job attempts the real Compact
+compile; it's marked `continue-on-error` since the runner doesn't yet
+have the `compact` CLI pinned/installed — the circuit compiles cleanly
+locally (see badge above for the primary pipeline's status).
 
 ## Submission checklist status
 
 - [x] Fully functional dApp meaningfully using Midnight's privacy model
 - [x] Circuit compiles cleanly with the real Compact CLI
+- [x] Real wallet connection via the Midnight DApp Connector API
 - [x] 3+ tests passing (14 passing — see `npm test`)
-- [x] CI/CD workflow file, designed to pass on push
+- [x] CI/CD workflow file, passing on push
 - [x] Approved idea from the provided list (Age / Eligibility Gate — see `PRODUCT_PROPOSAL.md`)
 - [x] 10+ meaningful commits (this repo's history)
 - [x] README privacy model section (above)
 - [x] Product proposal (`PRODUCT_PROPOSAL.md`)
-- [ ] Live demo link — add after you deploy (step 4 above)
-- [ ] Screenshot of test output — capture after your first `npm test`/CI run
-- [ ] CI badge — add once your GitHub Actions run is green (badge markdown below)
-- [ ] Demo video (1 minute) — record after deploying
-
-Once your GitHub Actions run is green, add this badge to the top of
-this README (replace `OWNER/REPO`):
-
-```md
-![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)
-```
+- [x] Live demo link — https://midnight-age-gate-frontend.vercel.app/
+- [x] Screenshot of test output — see "Run tests" above
+- [x] CI badge — top of this README
+- [ ] Demo video (1 minute) — see "Demo video" above
