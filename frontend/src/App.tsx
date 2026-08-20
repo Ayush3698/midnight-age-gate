@@ -1,33 +1,64 @@
 import { useState } from "react";
-import { createMockConnector, type WalletConnection } from "./lib/midnight";
+import {
+  createLiveConnector,
+  createMockConnector,
+  isWalletAvailable,
+  type WalletConnection,
+  type AgeGateConnector,
+} from "./lib/midnight";
 import type { LedgerState } from "../../contract/src/ledger-model";
 import "./styles.css";
 
-const connector = createMockConnector(18);
+type SubmitStatus =
+  | { kind: "idle" }
+  | { kind: "pending" }
+  | { kind: "ok"; tx: string }
+  | { kind: "error"; message: string };
 
 export default function App() {
   const [wallet, setWallet] = useState<WalletConnection | null>(null);
+  const [connector, setConnector] = useState<AgeGateConnector | null>(null);
+  const [mode, setMode] = useState<"live" | "mock" | null>(null);
   const [dob, setDob] = useState("");
   const [state, setState] = useState<LedgerState>({
     threshold: 18,
     verifiedCount: 0,
     eligible: new Map(),
   });
-  const [status, setStatus] = useState<
-    { kind: "idle" } | { kind: "pending" } | { kind: "ok"; tx: string } | { kind: "error"; message: string }
-  >({ kind: "idle" });
+  const [status, setStatus] = useState<SubmitStatus>({ kind: "idle" });
 
   const myStatus = wallet ? state.eligible.get(wallet.address) ?? false : false;
 
   async function handleConnect() {
-    const w = await connector.connectWallet();
+    setStatus({ kind: "pending" });
+    if (isWalletAvailable()) {
+      try {
+        const live = createLiveConnector(18);
+        const w = await live.connectWallet(); // pops the extension's approval dialog
+        setConnector(live);
+        setWallet(w);
+        setState(await live.getPublicState());
+        setMode("live");
+        setStatus({ kind: "idle" });
+        return;
+      } catch (err) {
+        setStatus({ kind: "error", message: (err as Error).message });
+        return;
+      }
+    }
+    // No wallet extension detected — fall back to the in-browser demo mode.
+    const mock = createMockConnector(18);
+    const w = await mock.connectWallet();
+    setConnector(mock);
     setWallet(w);
-    setState(await connector.getPublicState());
+    setState(await mock.getPublicState());
+    setMode("mock");
+    setStatus({ kind: "idle" });
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!wallet) return;
+    if (!wallet || !connector) return;
     setStatus({ kind: "pending" });
     try {
       const { txHash, state: next } = await connector.submitEligibilityProof(dob);
@@ -82,9 +113,16 @@ export default function App() {
           <h2>What stays on your device</h2>
 
           {!wallet ? (
-            <button className="btn btn--primary" onClick={handleConnect}>
-              Connect wallet
-            </button>
+            <>
+              <button className="btn btn--primary" onClick={handleConnect}>
+                Connect wallet
+              </button>
+              <p className="hint">
+                {isWalletAvailable()
+                  ? "A Midnight wallet extension was detected — this will open it and ask you to approve the connection."
+                  : "No Midnight wallet extension detected in this browser. Install the Lace Midnight Preview extension and reload to connect for real — otherwise this runs in local demo mode."}
+              </p>
+            </>
           ) : (
             <form onSubmit={handleSubmit} className="form">
               <label htmlFor="dob">Date of birth</label>
@@ -106,7 +144,15 @@ export default function App() {
             </form>
           )}
 
-          {status.kind === "pending" && <p className="status status--pending">Generating proof…</p>}
+          {wallet && mode && (
+            <p className="status status--pending">
+              {mode === "live"
+                ? `Connected to your wallet extension · ${wallet.address}`
+                : `Demo mode (no wallet extension found) · ${wallet.address}`}
+            </p>
+          )}
+
+          {status.kind === "pending" && !wallet && <p className="status status--pending">Connecting…</p>}
           {status.kind === "ok" && (
             <p className="status status--ok">
               Proof verified on-chain. Tx <code>{status.tx}</code>
@@ -114,16 +160,16 @@ export default function App() {
           )}
           {status.kind === "error" && (
             <p className="status status--error">
-              Proof rejected: {status.message}. (Your birthdate was never sent anywhere.)
+              {status.message}
             </p>
           )}
         </section>
       </main>
 
       <footer className="footnote">
-        Wallet + proof flow shown here run against a local mock that mirrors the deployed
-        contract's exact state machine — see <code>frontend/src/lib/midnight.ts</code> for the
-        one function to swap in a live Midnight wallet connection.
+        {mode === "live"
+          ? "Wallet connection is live via your installed extension. Proof submission still runs against a local state mirror until a contract is deployed — see README."
+          : "Wallet + proof flow shown here run against a local mock that mirrors the deployed contract's exact state machine — see frontend/src/lib/midnight.ts."}
       </footer>
     </div>
   );
