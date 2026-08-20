@@ -37,22 +37,19 @@ jobs:
         run: npx vite build
 
   compact-compile:
-    name: Compile Compact circuit (informational)
+    name: Compile Compact circuit
     runs-on: ubuntu-latest
+    # Non-blocking for now: this job depends on however you install the
+    # `compact` CLI on a fresh runner (e.g. via the Midnight installer
+    # script or a cached binary), which isn't pinned here yet. The
+    # circuit itself compiles cleanly locally — once you've settled on
+    # an install method for CI, drop `continue-on-error` so this gates
+    # merges too.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      # The Compact compiler CLI/toolchain version tracks Midnight's
-      # active testnet release and is best installed per the current
-      # Midnight docs (https://docs.midnight.network). This job is
-      # non-blocking (continue-on-error) so contract-logic + frontend
-      # CI still gate merges even before the toolchain step is pinned
-      # to a specific published package/version.
-      - name: Compile age-gate.compact
+      - name: Install compact CLI
         run: |
-          npm install -g @midnight-ntwrk/compact-cli || echo "Install the current Compact CLI per Midnight docs and update this step"
-          npx compact compile contract/src/age-gate.compact contract/build || echo "Wire up the real compiler command here once installed"
+          echo "Install the compact CLI per https://docs.midnight.network (installer script or cached binary), then remove this echo."
+      - name: Compile age-gate.compact
+        run: compact compile contract/src/age-gate.compact contract/build

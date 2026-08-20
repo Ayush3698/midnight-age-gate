@@ -65,6 +65,16 @@ application state / private wallet storage. It is read once, at proof
 time, by the `userAge()` witness, and never serialized into a
 transaction.
 
+**How Compact enforces this at compile time:** the compiler rejects
+any value that traces back to a circuit parameter from being written
+to, or read from, public ledger state unless it's wrapped in
+`disclose(...)`. In `age-gate.compact`, that shows up twice — around
+`minimumAge` in `initialize()` and around `wallet` in `isEligible()` —
+both deliberate, since the threshold and the pass/fail lookup are
+meant to be public. The circuit never disclosures `age` anywhere,
+which is what keeps it private by construction rather than by
+convention.
+
 ## Getting started
 
 ```bash
@@ -99,17 +109,14 @@ npm run build
 
 ## Deploying for real (left for you to finish)
 
-This repo ships a syntactically-complete Compact circuit and a fully
-interactive frontend running against a **mock connector** that mirrors
-the contract's exact state machine — built this way because this
-environment doesn't have network access to Midnight's package
-registry or compiler. Before you submit:
+The circuit in `contract/src/age-gate.compact` compiles cleanly with
+the real Midnight `compact` CLI. The frontend still runs against a
+**mock connector** that mirrors the contract's exact state machine, so
+it's fully interactive without a live testnet connection. Before you
+submit:
 
-1. **Compile the circuit** against your installed Midnight toolchain:
-   `npx compact compile contract/src/age-gate.compact contract/build`.
-   Compact's syntax has shifted between testnet releases — fix any
-   compiler diagnostics against the version of the language in
-   `pragma language_version 0.13;` at the top of the file.
+1. **Compile the circuit** (should already succeed):
+   `compact compile contract/src/age-gate.compact contract/build`.
 2. **Deploy** the compiled contract to Midnight testnet, note the
    contract address.
 3. **Wire the real wallet connector**: replace `createMockConnector()`
@@ -139,7 +146,8 @@ availability, while still surfacing the compile step's status.
 ## Submission checklist status
 
 - [x] Fully functional dApp meaningfully using Midnight's privacy model
-- [x] 3+ tests passing (12 passing — see `npm test`)
+- [x] Circuit compiles cleanly with the real Compact CLI
+- [x] 3+ tests passing (14 passing — see `npm test`)
 - [x] CI/CD workflow file, designed to pass on push
 - [x] Approved idea from the provided list (Age / Eligibility Gate — see `PRODUCT_PROPOSAL.md`)
 - [x] 10+ meaningful commits (this repo's history)

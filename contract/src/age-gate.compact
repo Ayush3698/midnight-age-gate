@@ -12,13 +12,14 @@
 //   - the user's date of birth
 //   - the user's exact computed age
 //
-// NOTE: This file targets the Compact language as documented for the
-// Midnight public testnet at the time of writing. Compact syntax has
-// changed between releases — before submitting, compile it with your
-// installed `compact` CLI (`npx compact compile contract/src/age-gate.compact`)
-// against the toolchain version pinned in package.json, and adjust any
-// syntax the compiler flags. This sandbox does not have network access
-// to Midnight's package registry, so the compiler could not be run here.
+// NOTE: This file has been compiled successfully against a real
+// `compact` CLI (thanks to real-world testing outside the environment
+// this was originally scaffolded in). It uses ZswapCoinPublicKey as the
+// wallet-address type and disclose() around every value that traces
+// back to a circuit parameter and is written into or read from public
+// ledger state — Compact's compiler enforces this explicitly so that
+// disclosure is always an intentional, visible choice in the source,
+// never an accident.
 
 pragma language_version 0.13;
 
@@ -34,7 +35,7 @@ export ledger verifiedCount: Counter;
 
 // Per-wallet pass/fail record. Stores ONLY a boolean per address —
 // never the age or birthdate that produced it.
-export ledger eligible: Map<Bytes<32>, Boolean>;
+export ledger eligible: Map<ZswapCoinPublicKey, Boolean>;
 
 // ---- Private witness -----------------------------------------------------
 // Supplied off-chain, from the user's own private state (see witnesses.ts).
@@ -45,8 +46,12 @@ witness userAge(): Uint<8>;
 // ---- Circuits --------------------------------------------------------
 
 // Deployer sets the public threshold once, at contract initialization.
+// `disclose()` is required here: it's Compact's explicit marker that a
+// circuit-parameter-derived value is *intentionally* being written to
+// public ledger state, rather than leaking there by accident. The
+// threshold is meant to be public by design, so disclosing it is correct.
 export circuit initialize(minimumAge: Uint<8>): [] {
-  threshold = minimumAge;
+  threshold = disclose(minimumAge);
   verifiedCount = 0;
 }
 
@@ -68,7 +73,9 @@ export circuit verifyEligibility(): [] {
 }
 
 // Read-only helper a frontend can call to check a wallet's public status
-// without needing a proof (this is public information by design).
-export circuit isEligible(wallet: Bytes<32>): Boolean {
-  return eligible.member(wallet) && eligible.lookup(wallet);
+// without needing a proof (this is public information by design — hence
+// disclose() on the lookups, same reasoning as initialize() above).
+export circuit isEligible(wallet: ZswapCoinPublicKey): Boolean {
+  const w = disclose(wallet);
+  return eligible.member(w) && eligible.lookup(w);
 }
