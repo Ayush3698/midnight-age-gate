@@ -11,7 +11,7 @@ production-hardened dApp with tests and CI/CD, built against the
 
 ## Live demo
 
-**[midnight-age-gate-frontend.vercel.app](https://midnight-age-gate-frontend.vercel.app/)**
+**[midnight-age-gate-frontend.vercel.app](https://midnight-age-gate-frontend-cewk.vercel.app/)**
 
 <!-- ADD A SCREENSHOT OF THE LIVE APP HERE:
 ![Age Gate UI](docs/screenshot-app.png)
